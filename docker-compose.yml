@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    container_name: aetheris-postgres
+    environment:
+      POSTGRES_DB: aetheris
+      POSTGRES_USER: aetheris
+      POSTGRES_PASSWORD: aetheris123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - aetheris-network
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: aetheris-backend
+    environment:
+      DATABASE_URL: postgresql://aetheris:aetheris123@postgres:5432/aetheris
+      NEXTAUTH_SECRET: your-super-secret-key-here
+      NEXTAUTH_URL: http://localhost:3001
+    ports:
+      - "3001:3001"
+    depends_on:
+      - postgres
+    networks:
+      - aetheris-network
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+
+  # Frontend Application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: aetheris-frontend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - aetheris-network
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+volumes:
+  postgres_data:
+
+networks:
+  aetheris-network:
+    driver: bridge
