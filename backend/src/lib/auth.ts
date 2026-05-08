@@ -2,8 +2,7 @@ import { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import GoogleProvider from 'next-auth/providers/google';
 import GitHubProvider from 'next-auth/providers/github';
-import { db } from '../db';
-import { users } from '../db/schema';
+import { db, users } from './database';
 import { eq } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
 
@@ -21,7 +20,8 @@ export const authOptions: NextAuthOptions = {
         }
 
         try {
-          const [user] = await db
+          const database = db();
+          const [user] = await database
             .select()
             .from(users)
             .where(eq(users.email, credentials.email));
@@ -60,7 +60,7 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async session({ session, token }) {
       if (token && session.user) {
-        session.user.id = token.id as string;
+        (session.user as any).id = token.id as string;
       }
       return session;
     },

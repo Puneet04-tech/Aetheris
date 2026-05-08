@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '../../../../../db';
-import { votes, posts } from '../../../../../db/schema';
+import { db, votes, posts } from '../../../../../lib/database';
 import { eq, and, sql } from 'drizzle-orm';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '../../../../../auth';
+import { authOptions } from '../../../../../lib/auth';
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -16,27 +15,28 @@ export async function POST(
     }
 
     const { voteType } = await request.json();
-    const postId = params.id;
+    const { id: postId } = await params;
 
     // Check if user already voted
-    const [existingVote] = await db
+    const database = db();
+    const [existingVote] = await database
       .select()
       .from(votes)
-      .where(and(eq(votes.postId, postId), eq(votes.userId, session.user.id!)));
+      .where(and(eq(votes.postId, postId), eq(votes.userId, (session.user as any).id!)));
 
     if (existingVote) {
       // Update existing vote
       if (existingVote.type === voteType) {
         // Remove vote if same type
-        await db.delete(votes).where(and(eq(votes.postId, postId), eq(votes.userId, session.user.id!)));
+        await database.delete(votes).where(and(eq(votes.postId, postId), eq(votes.userId, (session.user as any).id!)));
         
         // Update post vote counts
         if (voteType === 'upvote') {
-          await db.update(posts)
+          await database.update(posts)
             .set({ upvotes: sql`${posts.upvotes} - 1` })
             .where(eq(posts.id, postId));
         } else {
-          await db.update(posts)
+          await database.update(posts)
             .set({ downvotes: sql`${posts.downvotes} - 1` })
             .where(eq(posts.id, postId));
         }
@@ -44,12 +44,12 @@ export async function POST(
         return NextResponse.json({ voted: false });
       } else {
         // Change vote type
-        await db.update(votes)
+        await database.update(votes)
           .set({ type: voteType })
-          .where(and(eq(votes.postId, postId), eq(votes.userId, session.user.id!)));
+          .where(and(eq(votes.postId, postId), eq(votes.userId, (session.user as any).id!)));
         
         // Update post vote counts
-        await db.update(posts)
+        await database.update(posts)
           .set({ 
             upvotes: sql`${posts.upvotes} + ${voteType === 'upvote' ? 1 : -1}`,
             downvotes: sql`${posts.downvotes} + ${voteType === 'downvote' ? 1 : -1}`
@@ -60,19 +60,19 @@ export async function POST(
       }
     } else {
       // Add new vote
-      await db.insert(votes).values({
+      await database.insert(votes).values({
         postId,
-        userId: session.user.id!,
+        userId: (session.user as any).id!,
         type: voteType,
       });
       
       // Update post vote counts
       if (voteType === 'upvote') {
-        await db.update(posts)
+        await database.update(posts)
           .set({ upvotes: sql`${posts.upvotes} + 1` })
           .where(eq(posts.id, postId));
       } else {
-        await db.update(posts)
+        await database.update(posts)
           .set({ downvotes: sql`${posts.downvotes} + 1` })
           .where(eq(posts.id, postId));
       }

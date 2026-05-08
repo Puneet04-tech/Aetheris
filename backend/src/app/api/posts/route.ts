@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '../../../../db';
-import { posts, users, communities, votes } from '../../../../db/schema';
+import { db, posts, users, communities, votes } from '../../../lib/database';
 import { eq, desc, sql } from 'drizzle-orm';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '../../../../auth';
+import { authOptions } from '../../../lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,12 +12,14 @@ export async function GET(request: NextRequest) {
     const communityId = searchParams.get('communityId');
     const sort = searchParams.get('sort') || 'latest';
 
-    let query = db
+    const database = db();
+    let query = database
       .select({
         id: posts.id,
         type: posts.type,
         title: posts.title,
         content: posts.content,
+        excerpt: posts.excerpt,
         imageUrl: posts.imageUrl,
         codeUrl: posts.codeUrl,
         codeLanguage: posts.codeLanguage,
@@ -28,19 +29,22 @@ export async function GET(request: NextRequest) {
         upvotes: posts.upvotes,
         downvotes: posts.downvotes,
         viewCount: posts.viewCount,
-        tags: posts.tags,
+        commentCount: posts.commentCount,
         isPinned: posts.isPinned,
+        isFeatured: posts.isFeatured,
+        tags: posts.tags,
+        metadata: posts.metadata,
         createdAt: posts.createdAt,
         updatedAt: posts.updatedAt,
         author: {
           name: users.name,
           image: users.image,
         },
-        community: {
+        community: communities ? {
+          id: communities.id,
           name: communities.name,
           slug: communities.slug,
-          icon: communities.icon,
-        },
+        } : null,
       })
       .from(posts)
       .leftJoin(users, eq(posts.authorId, users.id))
@@ -81,19 +85,23 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { type, title, content, communityId, imageUrl, codeUrl, codeLanguage, linkUrl, tags } = body;
+    const { type, title, content, communityId, imageUrl, codeUrl, codeLanguage, linkUrl, tags, codeSnippet } = body;
 
-    const [post] = await db.insert(posts).values({
+    const database = db();
+    const [post] = await database.insert(posts).values({
+      id: crypto.randomUUID(),
       type,
       title,
       content,
-      authorId: session.user.id!,
+      authorId: (session.user as any).id!,
       communityId,
       imageUrl,
       codeUrl,
       codeLanguage,
+      codeSnippet,
       linkUrl,
       tags,
+      metadata: {},
     }).returning();
 
     return NextResponse.json(post, { status: 201 });

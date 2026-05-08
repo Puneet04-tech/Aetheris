@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '../../../../db';
-import { communities, users, communityMembers } from '../../../../db/schema';
+import { db, communities, users, communityMembers } from '../../../lib/database';
 import { eq, desc, sql } from 'drizzle-orm';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '../../../../auth';
+import { authOptions } from '../../../lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,7 +11,8 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0');
     const search = searchParams.get('search');
 
-    let query = db
+    const database = db();
+    let query = database
       .select({
         id: communities.id,
         name: communities.name,
@@ -62,19 +62,20 @@ export async function POST(request: NextRequest) {
     // Generate slug from name
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
-    const [community] = await db.insert(communities).values({
+    const database = db();
+    const [community] = await database.insert(communities).values({
       name,
       slug,
       description,
       icon,
       isPrivate,
-      creatorId: session.user.id!,
+      creatorId: (session.user as any).id!,
       memberCount: 1,
     }).returning();
 
     // Add creator as member
-    await db.insert(communityMembers).values({
-      userId: session.user.id!,
+    await database.insert(communityMembers).values({
+      userId: (session.user as any).id!,
       communityId: community.id,
       role: 'admin',
     });

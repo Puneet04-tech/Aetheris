@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '../../../../db';
-import { opportunities, users } from '../../../../db/schema';
+import { db, opportunities, users } from '../../../lib/database';
 import { eq, desc, sql } from 'drizzle-orm';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '../../../../auth';
+import { authOptions } from '../../../lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,7 +12,8 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get('type');
     const remote = searchParams.get('remote');
 
-    let query = db
+    const database = db();
+    let query = database
       .select({
         id: opportunities.id,
         title: opportunities.title,
@@ -27,7 +27,6 @@ export async function GET(request: NextRequest) {
         remote: opportunities.remote,
         tags: opportunities.tags,
         authorId: opportunities.authorId,
-        isActive: opportunities.isActive,
         createdAt: opportunities.createdAt,
         author: {
           name: users.name,
@@ -68,7 +67,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { title, description, company, location, type, salaryMin, salaryMax, equity, remote, tags } = body;
 
-    const [opportunity] = await db.insert(opportunities).values({
+    const database = db();
+    const [opportunity] = await database.insert(opportunities).values({
       title,
       description,
       company,
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
       equity,
       remote,
       tags,
-      authorId: session.user.id!,
+      authorId: (session.user as any).id!,
       isActive: true,
     }).returning();
 

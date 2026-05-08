@@ -13,18 +13,28 @@
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx db/seed.ts"
   },
-  "keywords": ["nodejs", "express", "postgresql", "drizzle", "typescript", "api"],
+  "keywords": [
+    "nodejs",
+    "express",
+    "postgresql",
+    "drizzle",
+    "typescript",
+    "api"
+  ],
   "author": "Aetheris Team",
   "license": "MIT",
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.2",
     "@neondatabase/serverless": "^1.1.0",
+    "autoprefixer": "^10.5.0",
     "bcryptjs": "^2.4.3",
     "drizzle-orm": "^0.45.2",
     "next": "16.2.4",
     "next-auth": "^4.24.14",
+    "postcss": "^8.5.14",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "tailwindcss": "^4.2.4"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

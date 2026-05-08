@@ -120,7 +120,7 @@ export const comments = pgTable("comments", {
   content: text("content").notNull(),
   postId: text("post_id").references(() => posts.id),
   authorId: text("author_id").references(() => users.id),
-  parentId: text("parent_id").references(() => comments.id),
+  parentId: text("parent_id"),
   upvotes: integer("upvotes").default(0),
   downvotes: integer("downvotes").default(0),
   depth: integer("depth").default(0), // For tracking nesting level
