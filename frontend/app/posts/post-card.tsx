@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
+import Image from 'next/image';
+import { Card, CardContent, CardDescription, CardHeader } from '../ui/card';
 import { Button } from '../ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Badge } from '../ui/badge';
@@ -14,7 +15,7 @@ import {
   MoreHorizontal,
   Eye,
   Code,
-  Image,
+  Image as ImageIcon,
   FileText,
   Link,
   Clock,
@@ -90,7 +91,7 @@ export function PostCard({ post }: PostCardProps) {
       case 'REPO':
         return <Code className="h-4 w-4" />;
       case 'GALLERY':
-        return <Image className="h-4 w-4" />;
+        return <ImageIcon className="h-4 w-4" />;
       case 'ARTICLE':
         return <FileText className="h-4 w-4" />;
       case 'PULSE':
@@ -190,9 +191,11 @@ export function PostCard({ post }: PostCardProps) {
 
         {post.imageUrl && (
           <div className="rounded-lg overflow-hidden">
-            <img 
-              src={post.imageUrl} 
+            <Image
+              src={post.imageUrl}
               alt={post.title}
+              width={600}
+              height={256}
               className="w-full h-64 object-cover"
             />
           </div>

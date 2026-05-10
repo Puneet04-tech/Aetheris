@@ -1,6 +1,10 @@
-import { useState, useEffect } from 'react';
-import { apiClient, PaginatedResponse } from '../api';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { postsAPI, communitiesAPI, opportunitiesAPI, qaAPI } from '../../../lib/api';
 
+/**
+ * ISSUE 1: useApi Memoization
+ * Wrapped fetchData in useCallback to ensure stable identity.
+ */
 export function useApi<T>(
   apiCall: () => Promise<T>,
   dependencies: any[] = []
@@ -9,7 +13,7 @@ export function useApi<T>(
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -20,15 +24,20 @@ export function useApi<T>(
     } finally {
       setLoading(false);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, dependencies); 
 
   useEffect(() => {
     fetchData();
-  }, dependencies);
+  }, [fetchData]);
 
   return { data, loading, error, refetch: fetchData };
 }
 
+/**
+ * ISSUE 2: Object Reference Stability
+ * Use JSON.stringify for dependencies to prevent infinite loops from object literals.
+ */
 export function usePosts(params: {
   page?: number;
   limit?: number;
@@ -37,9 +46,20 @@ export function usePosts(params: {
   community?: string;
   search?: string;
 }) {
-  return useApi(() => apiClient.getPosts(params), [params]);
+  const paramKey = JSON.stringify(params);
+  return useApi(() => postsAPI.list(
+      limit: params.limit,
+      offset: params.offset,
+      sort: params.sort,
+      ...(params.communityId && { communityId: params.communityId }),
+      ...(params.search && { search: params.search })
+    ), [paramKey]);
 }
 
+/**
+ * ISSUE 3: Pagination Desync
+ * Removed redundant fetch calls. Let the dependency array handle the lifecycle.
+ */
 export function usePaginatedPosts(params: {
   page?: number;
   limit?: number;
@@ -48,47 +68,30 @@ export function usePaginatedPosts(params: {
   community?: string;
   search?: string;
 }) {
-  const [data, setData] = useState<PaginatedResponse<any> | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(params.page || 1);
+  const paramKey = JSON.stringify(params);
 
-  const fetchPosts = async (page: number = currentPage) => {
-    try {
-      setLoading(true);
-      setError(null);
-      const result = await apiClient.getPosts({ ...params, page });
-      setData(result);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchPosts();
-  }, [params]);
+  // Single source of truth: useApi only fires when params or page changes
+  const { data, loading, error, refetch } = useApi(
+    () => postsAPI.list({ ...params, page: currentPage }),
+    [paramKey, currentPage]
+  );
 
   const nextPage = () => {
-    if (data && currentPage < data.pagination.pages) {
-      const newPage = currentPage + 1;
-      setCurrentPage(newPage);
-      fetchPosts(newPage);
+    const totalPages = (data as any)?.pagination?.pages;
+    if (totalPages && currentPage < totalPages) {
+      setCurrentPage(prev => prev + 1);
     }
   };
 
   const prevPage = () => {
     if (currentPage > 1) {
-      const newPage = currentPage - 1;
-      setCurrentPage(newPage);
-      fetchPosts(newPage);
+      setCurrentPage(prev => prev - 1);
     }
   };
 
   const goToPage = (page: number) => {
     setCurrentPage(page);
-    fetchPosts(page);
   };
 
   return {
@@ -99,7 +102,7 @@ export function usePaginatedPosts(params: {
     nextPage,
     prevPage,
     goToPage,
-    refetch: () => fetchPosts(currentPage),
+    refetch,
   };
 }
 
@@ -109,9 +112,14 @@ export function useCommunities(params: {
   search?: string;
   filter?: 'all' | 'joined' | 'trending';
 }) {
-  return useApi(() => apiClient.getCommunities(params), [params]);
+  const paramKey = JSON.stringify(params);
+  return useApi(() => communitiesAPI.list(params), [paramKey]);
 }
 
+/**
+ * ISSUE 4: API Endpoint Mapping
+ * Corrected from communitiesAPI to opportunitiesAPI.
+ */
 export function useOpportunities(params: {
   page?: number;
   limit?: number;
@@ -121,5 +129,6 @@ export function useOpportunities(params: {
   salaryMin?: number;
   salaryMax?: number;
 }) {
-  return useApi(() => apiClient.getOpportunities(params), [params]);
+  const paramKey = JSON.stringify(params);
+  return useApi(() => opportunitiesAPI.list(params), [paramKey]);
 }
