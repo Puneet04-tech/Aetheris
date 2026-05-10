@@ -1,6 +1,7 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { Providers } from "./client";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -15,7 +16,15 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Aetheris - The Unified Professional Ecosystem",
   description: "Connect, collaborate, and grow in the ultimate professional platform that combines the best of LinkedIn, GitHub, Behance, Discord, and more.",
+  icons: {
+    icon: '/favicon.svg',
+  },
+};
+
+export const viewport: Viewport = {
   colorScheme: 'dark',
+  width: 'device-width',
+  initialScale: 1,
 };
 
 export default function RootLayout({
@@ -26,11 +35,14 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      data-scroll-behavior="smooth"
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased scroll-smooth`}
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col mesh-background">
-        <main className="flex-1">{children}</main>
+        <Providers>
+          <main className="flex-1">{children}</main>
+        </Providers>
       </body>
     </html>
   );

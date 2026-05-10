@@ -1,14 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, createContext } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { signIn } from 'next-auth/react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
 import { Globe } from 'lucide-react';
 import Link from 'next/link';
-import { SignInButton } from '../sign-in-button';
+
+// Simple inline auth context
+const AuthContext = createContext(null);
 
 export default function SignInPage() {
   const [formData, setFormData] = useState({
@@ -34,17 +35,27 @@ export default function SignInPage() {
     setIsLoading(true);
 
     try {
-      const result = await signIn('credentials', {
-        email: formData.email,
-        password: formData.password,
-        redirect: false,
+      const response = await fetch('http://localhost:3001/api/auth/signin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password
+        }),
       });
 
-      if (result?.error) {
+      if (!response.ok) {
         setError('Invalid email or password');
-      } else if (result?.ok) {
-        router.push('/');
+        return;
+      }
+
+      const userData = await response.json();
+      if (userData.success) {
+        localStorage.setItem('user', JSON.stringify(userData.user));
+        router.push('/dashboard');
         router.refresh();
+      } else {
+        setError('Invalid email or password');
       }
     } catch (error) {
       setError('Network error. Please try again.');
@@ -77,6 +88,7 @@ export default function SignInPage() {
                 value={formData.email}
                 onChange={handleChange}
                 required
+                autoComplete="email"
                 className="input-glass text-white placeholder-gray-400"
               />
             </div>
@@ -88,6 +100,7 @@ export default function SignInPage() {
                 value={formData.password}
                 onChange={handleChange}
                 required
+                autoComplete="current-password"
                 className="input-glass text-white placeholder-gray-400"
               />
             </div>
@@ -107,7 +120,7 @@ export default function SignInPage() {
 
           <div className="text-center">
             <div className="text-gray-400 text-sm mb-2">Or continue with</div>
-            <SignInButton />
+            <div className="text-gray-400 text-sm">Social login coming soon</div>
           </div>
 
           <div className="text-center">
