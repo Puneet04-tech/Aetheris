@@ -13,7 +13,7 @@ import {
   HelpCircle,
   Heart,
   MessageCircle,
-  Share2,
+  Share,
   ArrowUp,
   ArrowDown,
 } from 'lucide-react';
@@ -204,8 +204,8 @@ export function Feed({ posts = [] }: FeedProps) {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {Icon && <Icon size={20} className={`text-${variant}-400`} />}
-                  <Badge variant={variant} size="sm">
+                  {Icon && <Icon size={20} />}
+                  <Badge variant={variant}>
                     {label}
                   </Badge>
                 </div>
@@ -245,7 +245,7 @@ export function Feed({ posts = [] }: FeedProps) {
 
               <div className="flex flex-wrap gap-2 mb-4">
                 {post.tags.map((tag) => (
-                  <Badge key={tag} variant="outline" size="sm">
+                  <Badge key={tag} variant="outline">
                     #{tag}
                   </Badge>
                 ))}
@@ -267,7 +267,7 @@ export function Feed({ posts = [] }: FeedProps) {
                   </button>
                 </div>
                 <button className="flex items-center gap-1 text-gray-400 hover:text-golden-400 transition-colors">
-                  <Share2 size={16} />
+                  <Share size={16} />
                   <span className="text-sm">Share</span>
                 </button>
               </div>

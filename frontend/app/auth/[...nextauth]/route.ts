@@ -1,10 +1,3 @@
-import NextAuth from 'next-auth/next';
+import { handlers } from '@/auth';
 
-const handler = NextAuth({
-  providers: [],
-  pages: {
-    signIn: '/auth/signin',
-  },
-});
-
-export { handler as GET, handler as POST };
+export const { GET, POST } = handlers;
