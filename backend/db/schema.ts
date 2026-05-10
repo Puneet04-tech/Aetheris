@@ -6,23 +6,18 @@ export const users = pgTable("users", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   email: text("email").unique().notNull(),
+  password_hash: text("password_hash"), // Hashed password
+  bio: text("bio"),
   image: text("image"),
   coverImage: text("cover_image"),
-  role: text("role").default("professional"), // CEO, Lead, Specialist
-  badges: jsonb("badges"), // Dynamic ribbons/achievements
-  bio: text("bio"),
-  headline: text("headline"), // "CEO @ Startup | Designer | Developer"
+  title: text("title"), // User title/headline
   location: text("location"),
   website: text("website"),
-  github: text("github"),
-  linkedin: text("linkedin"),
-  twitter: text("twitter"),
-  portfolio: text("portfolio"),
-  reputation: integer("reputation").default(0), // Points from engagement
-  isVerified: boolean("is_verified").default(false),
-  verificationLevel: text("verification_level").default("unverified"), // unverified, verified, expert
+  verified: boolean("verified").default(false),
+  role: text("role").default("professional"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+  emailVerifiedAt: timestamp("email_verified_at"),
 });
 
 // User Streams (Multi-Hyphenate Profiles)
@@ -77,28 +72,25 @@ export const communities = pgTable("communities", {
   slug: text("slug").unique().notNull(),
   description: text("description"),
   icon: text("icon"),
-  banner: text("banner"),
   isPrivate: boolean("is_private").default(false),
   memberCount: integer("member_count").default(0),
-  creatorId: text("creator_id").references(() => users.id),
+  creatorId: text("creatorId").references(() => users.id),
   category: text("category"), // 'tech', 'design', 'business', etc.
-  tags: jsonb("tags"),
+  rules: text("rules"),
+  theme: text("theme"),
   createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 // Post Schema (The Nexus Feed)
 export const posts = pgTable("posts", {
   id: text("id").primaryKey(),
-  type: text("type").notNull(), // 'REPO', 'GALLERY', 'ARTICLE', 'PULSE', 'JOB', 'QUESTION', 'CASE_STUDY'
-  streamId: text("stream_id").references(() => userStreams.id), // Which stream this belongs to
+  type: text("type"), // 'REPO', 'GALLERY', 'ARTICLE', 'PULSE', 'JOB', 'QUESTION', 'CASE_STUDY'
   title: text("title"),
   content: text("content"),
   excerpt: text("excerpt"), // Short preview
   imageUrl: text("image_url"),
   codeUrl: text("code_url"),
   codeLanguage: text("code_language"),
-  codeSnippet: text("code_snippet"),
   linkUrl: text("link_url"),
   authorId: text("authorId").references(() => users.id),
   communityId: text("communityId").references(() => communities.id),
@@ -132,20 +124,17 @@ export const comments = pgTable("comments", {
 // Votes Schema
 export const votes = pgTable("votes", {
   id: text("id").primaryKey(),
-  type: text("type").notNull(), // 'upvote' or 'downvote'
-  userId: text("user_id").references(() => users.id),
-  postId: text("post_id").references(() => posts.id),
-  commentId: text("comment_id").references(() => comments.id),
+  userId: text("userId").references(() => users.id),
+  postId: text("postId").references(() => posts.id),
+  voteType: text("vote_type"), // 'upvote' or 'downvote'
   createdAt: timestamp("created_at").defaultNow(),
-}, (table) => [
-  unique().on(table.userId, table.postId, table.commentId)
-]);
+});
 
 // Community Members
 export const communityMembers = pgTable("community_members", {
   id: text("id").primaryKey(),
-  userId: text("user_id").references(() => users.id),
-  communityId: text("community_id").references(() => communities.id),
+  userId: text("userId").references(() => users.id),
+  communityId: text("communityId").references(() => communities.id),
   role: text("role").default("member"), // 'admin', 'moderator', 'member'
   joinedAt: timestamp("joined_at").defaultNow(),
 }, (table) => [
@@ -159,18 +148,14 @@ export const opportunities = pgTable("opportunities", {
   description: text("description").notNull(),
   company: text("company"),
   location: text("location"),
-  type: text("type").notNull(), // 'full-time', 'part-time', 'contract', 'freelance'
-  salaryMin: integer("salary_min"),
-  salaryMax: integer("salary_max"),
-  currency: text("currency").default("USD"),
+  type: text("type"), // 'full-time', 'part-time', 'contract', 'freelance'
+  salaryMin: decimal("salary_min"),
+  salaryMax: decimal("salary_max"),
   equity: text("equity"),
-  equityPercentage: decimal("equity_percentage", { precision: 5, scale: 2 }),
   remote: boolean("remote").default(false),
   tags: jsonb("tags"),
-  skills: jsonb("skills"),
-  authorId: text("author_id").references(() => users.id),
+  authorId: text("authorId").references(() => users.id),
   isActive: boolean("is_active").default(true),
-  viewCount: integer("view_count").default(0),
   applicationCount: integer("application_count").default(0),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -337,10 +322,6 @@ export const postsRelations = relations(posts, ({ one, many }) => ({
     fields: [posts.authorId],
     references: [users.id],
   }),
-  stream: one(userStreams, {
-    fields: [posts.streamId],
-    references: [userStreams.id],
-  }),
   community: one(communities, {
     fields: [posts.communityId],
     references: [communities.id],
@@ -377,10 +358,6 @@ export const votesRelations = relations(votes, ({ one }) => ({
   post: one(posts, {
     fields: [votes.postId],
     references: [posts.id],
-  }),
-  comment: one(comments, {
-    fields: [votes.commentId],
-    references: [comments.id],
   }),
 }));
 

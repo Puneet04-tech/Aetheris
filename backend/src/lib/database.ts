@@ -1,11 +1,10 @@
 import { drizzle } from 'drizzle-orm/neon-http';
-import { neon } from '@neondatabase/serverless';
+import { neon, NeonQueryFunction } from '@neondatabase/serverless';
 import * as schema from '../../db/schema';
-import { readFileSync } from 'fs';
-import { join } from 'path';
 
-let sql: any;
-let db: any;
+let sql: NeonQueryFunction<false, false> | null = null;
+let db: ReturnType<typeof drizzle> | null = null;
+let initialized = false;
 
 function initializeDatabase() {
   try {
@@ -16,21 +15,32 @@ function initializeDatabase() {
       throw new Error('DATABASE_URL is required for runtime');
     }
     
-    console.log('Attempting to connect to database...');
-    sql = neon(dbUrl);
-    db = drizzle(sql, { schema });
-    console.log('Database connected successfully');
+    if (!sql) {
+      console.log('Creating Neon database connection...');
+      sql = neon(dbUrl);
+    }
+    
+    if (!db) {
+      db = drizzle(sql, { schema });
+      console.log('Database initialized with Drizzle ORM');
+    }
+    
+    initialized = true;
     return db;
   } catch (error) {
     console.error('Database initialization failed:', error instanceof Error ? error.message : 'Unknown error');
-    console.error('Full error:', error);
-    throw error;
+    // Allow app to run without database in development
+    initialized = true;
+    return null;
   }
 }
 
 export function getDb() {
+  if (!initialized) {
+    initializeDatabase();
+  }
   if (!db) {
-    return initializeDatabase();
+    throw new Error('Database not available - check DATABASE_URL environment variable');
   }
   return db;
 }

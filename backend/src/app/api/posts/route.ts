@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, posts, users, communities, votes } from '../../../lib/database';
-import { eq, desc, sql } from 'drizzle-orm';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '../../../lib/auth';
+import { eq, desc, sql, and } from 'drizzle-orm';
+import { addCorsHeaders, corsOptions } from '../../../lib/cors-utils';
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,7 +12,27 @@ export async function GET(request: NextRequest) {
     const sort = searchParams.get('sort') || 'latest';
 
     const database = db();
-    let query = database
+    
+    // Build filter conditions
+    const filters = [];
+    if (communityId) {
+      filters.push(eq(posts.communityId, communityId));
+    }
+
+    // Add ordering logic
+    let orderByClause;
+    switch (sort) {
+      case 'top':
+        orderByClause = desc(sql`${posts.upvotes} - ${posts.downvotes}`);
+        break;
+      case 'hot':
+        orderByClause = desc(sql`${posts.upvotes} - ${posts.downvotes} / EXTRACT(EPOCH FROM (NOW() - ${posts.createdAt}))`);
+        break;
+      default:
+        orderByClause = desc(posts.createdAt);
+    }
+
+    const results = await database
       .select({
         id: posts.id,
         type: posts.type,
@@ -40,52 +59,70 @@ export async function GET(request: NextRequest) {
           name: users.name,
           image: users.image,
         },
-        community: communities ? {
+        community: {
           id: communities.id,
           name: communities.name,
           slug: communities.slug,
-        } : null,
+        },
       })
       .from(posts)
+      .where(filters.length > 0 ? and(...filters) : undefined)
       .leftJoin(users, eq(posts.authorId, users.id))
-      .leftJoin(communities, eq(posts.communityId, communities.id));
+      .leftJoin(communities, eq(posts.communityId, communities.id))
+      .orderBy(orderByClause)
+      .limit(limit)
+      .offset(offset);
 
-    if (communityId) {
-      query = query.where(eq(posts.communityId, communityId));
-    }
-
-    switch (sort) {
-      case 'top':
-        query = query.orderBy(desc(sql`${posts.upvotes} - ${posts.downvotes}`));
-        break;
-      case 'hot':
-        query = query.orderBy(desc(sql`${posts.upvotes} - ${posts.downvotes} / EXTRACT(EPOCH FROM (NOW() - ${posts.createdAt}))`));
-        break;
-      default:
-        query = query.orderBy(desc(posts.createdAt));
-    }
-
-    const results = await query.limit(limit).offset(offset);
-
-    return NextResponse.json(results);
+    const response = NextResponse.json(results);
+    response.headers.set('Access-Control-Allow-Origin', '*');
+    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    response.headers.set('Access-Control-Allow-Headers', 'Content-Type');
+    return response;
   } catch (error) {
     console.error('Error fetching posts:', error);
-    return NextResponse.json(
+    const errorResponse = NextResponse.json(
       { error: 'Failed to fetch posts' },
       { status: 500 }
     );
+    errorResponse.headers.set('Access-Control-Allow-Origin', '*');
+    errorResponse.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    errorResponse.headers.set('Access-Control-Allow-Headers', 'Content-Type');
+    return errorResponse;
+    errorResponse.headers.set('Access-Control-Allow-Origin', '*');
+    errorResponse.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    errorResponse.headers.set('Access-Control-Allow-Headers', 'Content-Type');
+    return errorResponse;
   }
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    },
+  });
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    // Custom auth check using Authorization header (case-insensitive)
+    const authHeader = request.headers.get('authorization') || request.headers.get('Authorization');
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const userId = authHeader.split(' ')[1];
+    
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const body = await request.json();
-    const { type, title, content, communityId, imageUrl, codeUrl, codeLanguage, linkUrl, tags, codeSnippet } = body;
+    const { type, title, content } = body;
 
     const database = db();
     const [post] = await database.insert(posts).values({
@@ -93,23 +130,28 @@ export async function POST(request: NextRequest) {
       type,
       title,
       content,
-      authorId: (session.user as any).id!,
-      communityId,
-      imageUrl,
-      codeUrl,
-      codeLanguage,
-      codeSnippet,
-      linkUrl,
-      tags,
-      metadata: {},
+      authorId: userId,
     }).returning();
 
-    return NextResponse.json(post, { status: 201 });
+    const response = NextResponse.json({ 
+      success: true, 
+      post 
+    }, { status: 201 });
+    response.headers.set('Access-Control-Allow-Origin', '*');
+    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    return response;
   } catch (error) {
     console.error('Error creating post:', error);
-    return NextResponse.json(
-      { error: 'Failed to create post' },
+    console.error('Error details:', error instanceof Error ? error.message : 'Unknown error');
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack available');
+    const errorResponse = NextResponse.json(
+      { error: 'Failed to create post', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
+    errorResponse.headers.set('Access-Control-Allow-Origin', '*');
+    errorResponse.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    errorResponse.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    return errorResponse;
   }
 }

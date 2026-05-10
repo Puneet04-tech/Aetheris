@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, communities, users, communityMembers } from '../../../lib/database';
-import { eq, desc, sql } from 'drizzle-orm';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '../../../lib/auth';
+import { eq, desc, sql, and } from 'drizzle-orm';
+import { addCorsHeaders, corsOptions } from '../../../lib/cors-utils';
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,7 +11,16 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search');
 
     const database = db();
-    let query = database
+    
+    // Build filter conditions
+    const filters = [];
+    if (search) {
+      filters.push(
+        sql`(${communities.name} ILIKE ${'%' + search + '%'} OR ${communities.description} ILIKE ${'%' + search + '%'})`
+      );
+    }
+
+    const results = await database
       .select({
         id: communities.id,
         name: communities.name,
@@ -29,30 +37,36 @@ export async function GET(request: NextRequest) {
         },
       })
       .from(communities)
-      .leftJoin(users, eq(communities.creatorId, users.id));
+      .where(filters.length > 0 ? and(...filters) : undefined)
+      .leftJoin(users, eq(communities.creatorId, users.id))
+      .orderBy(desc(communities.memberCount))
+      .limit(limit)
+      .offset(offset);
 
-    if (search) {
-      query = query.where(
-        sql`(${communities.name} ILIKE ${'%' + search + '%'} OR ${communities.description} ILIKE ${'%' + search + '%'})`
-      );
-    }
-
-    const results = await query.orderBy(desc(communities.memberCount)).limit(limit).offset(offset);
-
-    return NextResponse.json(results);
+    return addCorsHeaders(NextResponse.json(results));
   } catch (error) {
     console.error('Error fetching communities:', error);
-    return NextResponse.json(
+    return addCorsHeaders(NextResponse.json(
       { error: 'Failed to fetch communities' },
       { status: 500 }
-    );
+    ));
   }
+}
+
+export async function OPTIONS() {
+  return corsOptions();
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    // Custom auth check using Authorization header
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const userId = authHeader.split(' ')[1];
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -64,28 +78,30 @@ export async function POST(request: NextRequest) {
 
     const database = db();
     const [community] = await database.insert(communities).values({
+      id: crypto.randomUUID(),
       name,
       slug,
       description,
       icon,
       isPrivate,
-      creatorId: (session.user as any).id!,
+      creatorId: userId,
       memberCount: 1,
     }).returning();
 
     // Add creator as member
     await database.insert(communityMembers).values({
-      userId: (session.user as any).id!,
+      id: crypto.randomUUID(),
+      userId: userId,
       communityId: community.id,
       role: 'admin',
     });
 
-    return NextResponse.json(community, { status: 201 });
+    return addCorsHeaders(NextResponse.json(community, { status: 201 }));
   } catch (error) {
     console.error('Error creating community:', error);
-    return NextResponse.json(
+    return addCorsHeaders(NextResponse.json(
       { error: 'Failed to create community' },
       { status: 500 }
-    );
+    ));
   }
 }
