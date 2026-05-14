@@ -1,94 +1,96 @@
 'use client';
 
-import { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
+import { useState, useEffect, useCallback } from 'react';
+import { Card, CardContent, CardHeader } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
 import { Input } from '../../ui/input';
-import { ThumbsUp, MessageCircle, Eye, Plus, Search, X } from 'lucide-react';
+import { ThumbsUp, MessageCircle, Eye, Plus, Search } from 'lucide-react';
+import { qaAPI } from '../../../lib/api';
 
 interface Question {
   id: string;
   title: string;
-  description: string;
-  author: string;
-  tags: string[];
-  views: number;
-  answers: number;
-  votes: number;
-  answered: boolean;
-  timeAgo: string;
+  content?: string;
+  description?: string;
+  author?: string | { name: string; image?: string };
+  authorId?: string;
+  tags?: string[];
+  views?: number;
+  viewCount?: number;
+  answers?: number;
+  answerCount?: number;
+  votes?: number;
+  answered?: boolean;
+  isAnswered?: boolean;
+  timeAgo?: string;
+  createdAt?: string;
 }
 
 export default function QAPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState('unanswered');
-  const [answeredQuestions, setAnsweredQuestions] = useState<Set<string>>(new Set(['1', '2', '4', '5']));
+  const [answeredQuestions, setAnsweredQuestions] = useState<Set<string>>(new Set());
   const [showAnswerModal, setShowAnswerModal] = useState<string | null>(null);
   const [answerText, setAnswerText] = useState('');
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [activeToday] = useState(() => Math.floor(Math.random() * 50));
 
-  const [questions, setQuestions] = useState<Question[]>([
-    {
-      id: '1',
-      title: 'What is the best way to optimize React performance for large datasets?',
-      description: 'I\'m working with a table that displays 10,000+ rows and looking for optimization strategies.',
-      author: 'Alex Dev',
-      tags: ['React', 'Performance', 'JavaScript'],
-      views: 2345,
-      answers: 8,
-      votes: 234,
-      answered: true,
-      timeAgo: '2 hours ago',
-    },
-    {
-      id: '2',
-      title: 'How to design a scalable microservices architecture?',
-      description: 'Looking for best practices and patterns for designing microservices at scale.',
-      author: 'Sarah Architect',
-      tags: ['Microservices', 'Architecture', 'Backend'],
-      views: 5432,
-      answers: 12,
-      votes: 567,
-      answered: true,
-      timeAgo: '5 hours ago',
-    },
-    {
-      id: '3',
-      title: 'What is the difference between null and undefined in JavaScript?',
-      description: 'Understanding the nuances between null and undefined in JavaScript.',
-      author: 'Mike Chen',
-      tags: ['JavaScript', 'Basics', 'Programming'],
-      views: 1234,
-      answers: 15,
-      votes: 89,
-      answered: false,
-      timeAgo: '1 day ago',
-    },
-    {
-      id: '4',
-      title: 'Best practices for API authentication?',
-      description: 'Looking for comprehensive guide on securing API endpoints.',
-      author: 'Lisa Security',
-      tags: ['API', 'Security', 'Authentication'],
-      views: 3456,
-      answers: 23,
-      votes: 456,
-      answered: false,
-      timeAgo: '3 days ago',
-    },
-    {
-      id: '5',
-      title: 'How to implement lazy loading in React?',
-      description: 'Need help with implementing lazy loading for images and components.',
-      author: 'Tom Performance',
-      tags: ['React', 'Performance', 'Optimization'],
-      views: 890,
-      answers: 34,
-      votes: 234,
-      answered: false,
-      timeAgo: '6 hours ago',
-    },
-  ]);
+  // Time ago helper - declare before loadQuestions
+  const getTimeAgo = (date: string) => {
+    const now = new Date();
+    const then = new Date(date);
+    const seconds = Math.floor((now.getTime() - then.getTime()) / 1000);
+    
+    if (seconds < 60) return 'now';
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+    if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
+    return 'recently';
+  };
+
+  const loadQuestions = useCallback(async () => {
+    try {
+      const response = await qaAPI.listQuestions(50, 0, filter === 'unanswered' ? 'unanswered' : 'latest');
+      const questionList = Array.isArray(response) ? response : (response?.questions || response?.data || []);
+      
+      // Map API response to Question interface
+      const mappedQuestions = questionList.map((q: Question) => ({
+        id: q.id,
+        title: q.title,
+        description: q.content || q.description || '',
+        content: q.content || q.description || '',
+        author: typeof q.author === 'string' ? q.author : (q.author?.name || 'Anonymous'),
+        authorId: q.authorId,
+        tags: q.tags || [],
+        views: q.viewCount || 0,
+        viewCount: q.viewCount || 0,
+        answers: q.answerCount || 0,
+        answerCount: q.answerCount || 0,
+        votes: 0,
+        answered: q.isAnswered || false,
+        timeAgo: q.createdAt ? getTimeAgo(q.createdAt) : 'Recently',
+        createdAt: q.createdAt,
+      }));
+      
+      setQuestions(mappedQuestions);
+      // Update answered questions set
+      setAnsweredQuestions(new Set(mappedQuestions.filter((q: Question) => q.answered || q.isAnswered).map((q: Question) => q.id)));
+    } catch (err) {
+      console.error('Error loading questions:', err);
+      setQuestions([]);
+    }
+  }, [filter]);
+
+  // Fetch questions when component mounts and when filter changes
+  useEffect(() => {
+    // Avoid calling async operations at the top level of effects
+    // by wrapping them in a non-async function
+    const fetchQuestions = () => {
+      void loadQuestions();
+    };
+    fetchQuestions();
+  }, [loadQuestions]);
 
   const handleAnswer = (questionId: string) => {
     if (!answerText.trim()) return;
@@ -99,7 +101,7 @@ export default function QAPage() {
     
     // Add answer to question
     const updatedQuestions = questions.map(q => 
-      q.id === questionId ? { ...q, answered: true, answers: q.answers + 1 } : q
+      q.id === questionId ? { ...q, answered: true, answers: (q.answers || 0) + 1 } : q
     );
     setQuestions(updatedQuestions);
     
@@ -110,8 +112,8 @@ export default function QAPage() {
   const filteredQuestions = questions.filter(question => {
     const searchLower = searchQuery.toLowerCase();
     const matchesSearch = question.title.toLowerCase().includes(searchLower) ||
-                         question.description.toLowerCase().includes(searchLower) ||
-                         question.tags.some(tag => tag.toLowerCase().includes(searchLower));
+                         (question.description || '').toLowerCase().includes(searchLower) ||
+                         (question.tags || []).some(tag => tag.toLowerCase().includes(searchLower));
     
     if (filter === 'all') {
       return matchesSearch;
@@ -129,7 +131,7 @@ export default function QAPage() {
     { label: 'Total Questions', value: questions.length, color: 'emerald' },
     { label: 'Answered', value: questions.filter(q => q.answered).length, color: 'amethyst' },
     { label: 'Unanswered', value: questions.filter(q => !q.answered).length, color: 'golden' },
-    { label: 'Active Today', value: Math.floor(Math.random() * 50), color: 'emerald' },
+    { label: 'Active Today', value: activeToday, color: 'emerald' },
   ];
 
   const filters = [
@@ -170,7 +172,7 @@ export default function QAPage() {
         {/* Stats */}
         <div className="grid md:grid-cols-4 gap-4">
           {stats.map((stat) => (
-            <Card key={stat.label} variant={stat.color as any}>
+            <Card key={stat.label} variant={stat.color as 'emerald' | 'amethyst' | 'golden'}>
               <CardContent className="pt-6">
                 <div className="text-center">
                   <p className="text-gray-300 text-sm mb-2">{stat.label}</p>
@@ -208,9 +210,9 @@ export default function QAPage() {
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
                       <h3 className="text-xl font-bold text-white">{question.title}</h3>
-                      <p className="text-gray-300 font-medium mb-2">{question.author}</p>
+                      <p className="text-gray-300 font-medium mb-2">{typeof question.author === 'string' ? question.author : (question.author?.name || 'Anonymous')}</p>
                       <div className="flex flex-wrap gap-2 mb-3">
-                        {question.tags.map((tag) => (
+                      {(question.tags || []).map((tag) => (
                           <Badge key={tag} variant="outline" className="text-xs">
                             {tag}
                           </Badge>
@@ -234,7 +236,7 @@ export default function QAPage() {
                 <div className="mb-4">
                   <p className="text-xs text-gray-400 mb-2">Tags</p>
                   <div className="flex flex-wrap gap-2">
-                    {question.tags.map((tag) => (
+                    {(question.tags || []).map((tag) => (
                       <Badge key={tag} variant="outline" className="text-xs">
                         {tag}
                       </Badge>

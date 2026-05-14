@@ -1,23 +1,22 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
-import { Globe } from 'lucide-react';
 import Link from 'next/link';
 
-export default function SignUpPage() {
+export default function SignInContent() {
   const [formData, setFormData] = useState({
-    name: '',
     email: '',
-    password: '',
-    confirmPassword: ''
+    password: ''
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const message = searchParams?.get('message');
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({
@@ -31,31 +30,28 @@ export default function SignUpPage() {
     setError('');
     setIsLoading(true);
 
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
-      setIsLoading(false);
-      return;
-    }
-
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/auth/register`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/auth/signin`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: formData.name,
           email: formData.email,
-          password: formData.password,
+          password: formData.password
         }),
       });
 
-      const data = await response.json();
+      if (!response.ok) {
+        setError('Invalid email or password');
+        return;
+      }
 
-      if (response.ok) {
-        router.push('/auth/signin?message=Registration successful');
+      const userData = await response.json();
+      if (userData.success) {
+        localStorage.setItem('user', JSON.stringify(userData.user));
+        router.push('/dashboard');
+        router.refresh();
       } else {
-        setError(data.error || 'Registration failed');
+        setError('Invalid email or password');
       }
     } catch (error) {
       setError('Network error. Please try again.');
@@ -65,29 +61,21 @@ export default function SignUpPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center mesh-background">
-      <Card className="glass-morphism w-full max-w-md">
+    <div className="min-h-screen mesh-background flex items-center justify-center p-4">
+      <Card className="w-full max-w-md glass-morphism border-white/10">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold text-white">
-            Create Account
-          </CardTitle>
+          <CardTitle className="text-2xl font-bold text-white">Welcome to Aetheris</CardTitle>
           <CardDescription className="text-gray-300">
-            Join Aetheris and start your professional journey
+            The unified professional ecosystem where talent meets opportunity
           </CardDescription>
+          {message && (
+            <div className="text-green-400 text-sm mt-2">
+              {message}
+            </div>
+          )}
         </CardHeader>
         <CardContent className="space-y-4">
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <Input
-                type="text"
-                name="name"
-                placeholder="Full Name"
-                value={formData.name}
-                onChange={handleChange}
-                required
-                className="input-glass text-white placeholder-gray-400"
-              />
-            </div>
             <div>
               <Input
                 type="email"
@@ -96,6 +84,7 @@ export default function SignUpPage() {
                 value={formData.email}
                 onChange={handleChange}
                 required
+                autoComplete="email"
                 className="input-glass text-white placeholder-gray-400"
               />
             </div>
@@ -107,17 +96,7 @@ export default function SignUpPage() {
                 value={formData.password}
                 onChange={handleChange}
                 required
-                className="input-glass text-white placeholder-gray-400"
-              />
-            </div>
-            <div>
-              <Input
-                type="password"
-                name="confirmPassword"
-                placeholder="Confirm Password"
-                value={formData.confirmPassword}
-                onChange={handleChange}
-                required
+                autoComplete="current-password"
                 className="input-glass text-white placeholder-gray-400"
               />
             </div>
@@ -131,17 +110,22 @@ export default function SignUpPage() {
               disabled={isLoading}
               className="w-full glass-morphism text-white hover:bg-white/20 transition-all duration-300"
             >
-              {isLoading ? 'Creating Account...' : 'Create Account'}
+              {isLoading ? 'Signing In...' : 'Sign In'}
             </Button>
           </form>
-          
-          <div className="text-center space-y-2">
+
+          <div className="text-center">
+            <div className="text-gray-400 text-sm mb-2">Or continue with</div>
+            <div className="text-gray-400 text-sm">Social login coming soon</div>
+          </div>
+
+          <div className="text-center">
             <div className="text-gray-400 text-sm">
-              Already have an account?
+              Don't have an account?
             </div>
-            <Link href="/auth/signin">
-              <Button variant="outline" className="w-full glass-morphism text-white hover:bg-white/20 transition-all duration-300">
-                Sign In
+            <Link href="/auth/signup">
+              <Button variant="outline" className="w-full mt-2 glass-morphism text-white hover:bg-white/20 transition-all duration-300">
+                Create Account
               </Button>
             </Link>
           </div>

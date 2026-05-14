@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { postsAPI, communitiesAPI, opportunitiesAPI, qaAPI } from '../../../lib/api';
+import { useState, useEffect, useCallback } from 'react';
+import { postsAPI, communitiesAPI, opportunitiesAPI } from '../../../lib/api';
 
 /**
  * ISSUE 1: useApi Memoization
@@ -7,13 +7,31 @@ import { postsAPI, communitiesAPI, opportunitiesAPI, qaAPI } from '../../../lib/
  */
 export function useApi<T>(
   apiCall: () => Promise<T>,
-  dependencies: any[] = []
+  dependencies: Array<string | number | boolean> = []
 ) {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchData = useCallback(async () => {
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const result = await apiCall();
+        setData(result);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'An error occurred');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, dependencies);
+
+  const refetch = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -24,14 +42,9 @@ export function useApi<T>(
     } finally {
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, dependencies); 
+  }, [apiCall]);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  return { data, loading, error, refetch: fetchData };
+  return { data, loading, error, refetch };
 }
 
 /**
@@ -47,13 +60,13 @@ export function usePosts(params: {
   search?: string;
 }) {
   const paramKey = JSON.stringify(params);
-  return useApi(() => postsAPI.list(
-      limit: params.limit,
-      offset: params.offset,
-      sort: params.sort,
-      ...(params.communityId && { communityId: params.communityId }),
-      ...(params.search && { search: params.search })
-    ), [paramKey]);
+  const limit = params.limit || 20;
+  const offset = ((params.page || 1) - 1) * limit;
+  const sortBy = params.sortBy || 'latest';
+  return useApi(
+    () => postsAPI.list(limit, offset, params.community, sortBy),
+    [paramKey]
+  );
 }
 
 /**
@@ -72,13 +85,16 @@ export function usePaginatedPosts(params: {
   const paramKey = JSON.stringify(params);
 
   // Single source of truth: useApi only fires when params or page changes
+  const limit = params.limit || 20;
+  const offset = (currentPage - 1) * limit;
+  const sortBy = params.sortBy || 'latest';
   const { data, loading, error, refetch } = useApi(
-    () => postsAPI.list({ ...params, page: currentPage }),
+    () => postsAPI.list(limit, offset, params.community, sortBy),
     [paramKey, currentPage]
   );
 
   const nextPage = () => {
-    const totalPages = (data as any)?.pagination?.pages;
+    const totalPages = (data as { pagination?: { pages?: number } })?.pagination?.pages;
     if (totalPages && currentPage < totalPages) {
       setCurrentPage(prev => prev + 1);
     }
@@ -113,7 +129,12 @@ export function useCommunities(params: {
   filter?: 'all' | 'joined' | 'trending';
 }) {
   const paramKey = JSON.stringify(params);
-  return useApi(() => communitiesAPI.list(params), [paramKey]);
+  const limit = params.limit || 20;
+  const offset = ((params.page || 1) - 1) * limit;
+  return useApi(
+    () => communitiesAPI.list(limit, offset, params.search),
+    [paramKey]
+  );
 }
 
 /**
@@ -130,5 +151,11 @@ export function useOpportunities(params: {
   salaryMax?: number;
 }) {
   const paramKey = JSON.stringify(params);
-  return useApi(() => opportunitiesAPI.list(params), [paramKey]);
+  const limit = params.limit || 20;
+  const offset = ((params.page || 1) - 1) * limit;
+  const remote = params.remote === 'true' ? true : params.remote === 'false' ? false : undefined;
+  return useApi(
+    () => opportunitiesAPI.list(limit, offset, params.type, remote),
+    [paramKey]
+  );
 }

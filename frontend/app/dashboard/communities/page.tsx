@@ -5,18 +5,19 @@ import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
 import { Users, MessageSquare, TrendingUp, Plus, Search } from 'lucide-react';
 import { Input } from '../../ui/input';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { communitiesAPI } from '../../../lib/api';
 
 interface Community {
   id: string;
   name: string;
   description: string;
-  members: number;
-  posts: number;
-  tags: string[];
+  memberCount?: number;
+  members?: number;
+  posts?: number;
+  tags?: string[];
   icon: string;
-  joined: boolean;
+  joined?: boolean;
 }
 
 export default function CommunitiesPage() {
@@ -29,68 +30,41 @@ export default function CommunitiesPage() {
     isPrivate: false
   });
   const [isCreating, setIsCreating] = useState(false);
-  const [communities, setCommunities] = useState<Community[]>([
-    {
-      id: '1',
-      name: 'Web3 Builders',
-      description: 'A community of blockchain developers and entrepreneurs building the future of web3.',
-      members: 5234,
-      posts: 12450,
-      tags: ['Web3', 'Blockchain', 'Development'],
-      icon: '⛓️',
-      joined: true,
-    },
-    {
-      id: '2',
-      name: 'AI Enthusiasts',
-      description: 'Discussing latest trends in artificial intelligence, machine learning, and deep learning.',
-      members: 8932,
-      posts: 24100,
-      tags: ['AI', 'ML', 'Deep Learning'],
-      icon: '🤖',
-      joined: false,
-    },
-    {
-      id: '3',
-      name: 'Design Systems',
-      description: 'Collaboration space for design system engineers and product designers.',
-      members: 3421,
-      posts: 8760,
-      tags: ['Design', 'Systems', 'UI/UX'],
-      icon: '🎨',
-      joined: true,
-    },
-    {
-      id: '4',
-      name: 'Startup Founders',
-      description: 'Exchange ideas, funding strategies, and growth hacks with other founders.',
-      members: 6754,
-      posts: 15234,
-      tags: ['Startup', 'Funding', 'Growth'],
-      icon: '🚀',
-      joined: false,
-    },
-    {
-      id: '5',
-      name: 'Remote Workers',
-      description: 'Tips, resources, and community for professionals working remotely worldwide.',
-      members: 12450,
-      posts: 34567,
-      tags: ['Remote', 'Work', 'Lifestyle'],
-      icon: '🌍',
-      joined: true,
-    },
-    {
-      id: '6',
-      name: 'Full Stack Dev',
-      description: 'End-to-end development discussions from frontend to backend and DevOps.',
-      members: 9876,
-      posts: 28900,
-      tags: ['Development', 'FullStack', 'DevOps'],
-      icon: '💻',
-      joined: false,
-    },
-  ]);
+  const [communities, setCommunities] = useState<Community[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch communities from API on mount
+  useEffect(() => {
+    loadCommunities();
+  }, []);
+
+  const loadCommunities = async () => {
+    try {
+      setLoading(true);
+      const response = await communitiesAPI.list(50, 0, searchQuery);
+      const communityList = Array.isArray(response) ? response : (response?.communities || response?.data || []);
+      
+      // Map API response to Community interface
+      const mappedCommunities = communityList.map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        description: c.description,
+        members: c.memberCount || 0,
+        memberCount: c.memberCount || 0,
+        posts: 0,
+        tags: c.tags || [],
+        icon: c.icon || '🚀',
+        joined: false,
+      }));
+      
+      setCommunities(mappedCommunities);
+    } catch (err) {
+      console.error('Error loading communities:', err);
+      setCommunities([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleJoinCommunity = (id: string) => {
     setCommunities(communities.map(c => 
@@ -191,7 +165,7 @@ export default function CommunitiesPage() {
               <div>
                 <p className="text-gray-300 text-sm mb-2">Total Members (Joined)</p>
                 <p className="text-3xl font-bold text-white">
-                  {(communities.filter(c => c.joined).reduce((sum, c) => sum + c.members, 0) / 1000).toFixed(1)}K
+                  {(communities.filter(c => c.joined).reduce((sum, c) => sum + (c.members || 0), 0) / 1000).toFixed(1)}K
                 </p>
               </div>
               <TrendingUp className="h-8 w-8 text-amethyst-400 opacity-50" />
@@ -237,17 +211,17 @@ export default function CommunitiesPage() {
               <div className="grid grid-cols-2 gap-2">
                 <div className="p-2 bg-black/20 rounded">
                   <p className="text-xs text-gray-400">Members</p>
-                  <p className="text-lg font-bold text-white">{(community.members / 1000).toFixed(1)}K</p>
+                  <p className="text-lg font-bold text-white">{((community.members || 0) / 1000).toFixed(1)}K</p>
                 </div>
                 <div className="p-2 bg-black/20 rounded">
                   <p className="text-xs text-gray-400">Posts</p>
-                  <p className="text-lg font-bold text-white">{(community.posts / 1000).toFixed(1)}K</p>
+                  <p className="text-lg font-bold text-white">{(((community.posts || 0) / 1000).toFixed(1))}K</p>
                 </div>
               </div>
 
               {/* Tags */}
               <div className="flex flex-wrap gap-2">
-                {community.tags.map((tag) => (
+                {(community.tags || []).map((tag) => (
                   <Badge key={tag} variant="outline" className="text-xs">
                     {tag}
                   </Badge>

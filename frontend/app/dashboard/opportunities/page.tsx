@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
@@ -13,13 +13,16 @@ interface Opportunity {
   title: string;
   company: string;
   type: 'full-time' | 'part-time' | 'freelance' | 'contract';
-  salary: string;
+  salary?: string;
   location: string;
   remote: boolean;
-  skills: string[];
+  skills?: string[];
   description: string;
-  posted: string;
-  applications: number;
+  posted?: string;
+  applications?: number;
+  createdAt?: string;
+  salaryMin?: number;
+  salaryMax?: number;
 }
 
 export default function OpportunitiesPage() {
@@ -37,34 +40,55 @@ export default function OpportunitiesPage() {
     remote: false
   });
   const [isCreating, setIsCreating] = useState(false);
-  const [opportunitiesList, setOpportunitiesList] = useState<Opportunity[]>([
-    {
-      id: '1',
-      title: 'Senior Full Stack Engineer',
-      company: 'TechCorp',
-      type: 'full-time',
-      salary: '$150K - $200K',
-      location: 'San Francisco, CA',
-      remote: true,
-      skills: ['React', 'Node.js', 'PostgreSQL', 'AWS'],
-      description: 'Build scalable web applications using modern technologies.',
-      posted: '2 days ago',
-      applications: 45,
-    },
-    {
-      id: '2',
-      title: 'UX/UI Designer',
-      company: 'DesignHub',
-      type: 'full-time',
-      salary: '$120K - $160K',
-      location: 'New York, NY',
-      remote: true,
-      skills: ['Figma', 'Design Systems', 'Prototyping'],
-      description: 'Create beautiful and intuitive user experiences for our platform.',
-      posted: '1 day ago',
-      applications: 45,
+  const [opportunitiesList, setOpportunitiesList] = useState<Opportunity[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch opportunities from API on mount
+  useEffect(() => {
+    loadOpportunities();
+  }, []);
+
+  const loadOpportunities = async () => {
+    try {
+      setLoading(true);
+      const response = await opportunitiesAPI.list(50, 0);
+      const oppList = Array.isArray(response) ? response : (response?.opportunities || response?.data || []);
+      
+      // Map API response to Opportunity interface
+      const mappedOpportunities = oppList.map((o: any) => ({
+        id: o.id,
+        title: o.title,
+        company: o.company || 'Unknown',
+        type: (o.type || 'full-time') as Opportunity['type'],
+        salary: o.salaryMin && o.salaryMax ? `$${o.salaryMin} - $${o.salaryMax}` : 'Competitive',
+        location: o.location || 'Remote',
+        remote: o.remote || false,
+        skills: o.tags || [],
+        description: o.description,
+        posted: o.createdAt ? getTimeAgo(o.createdAt) : 'Recently',
+        applications: 0,
+      }));
+      
+      setOpportunitiesList(mappedOpportunities);
+    } catch (err) {
+      console.error('Error loading opportunities:', err);
+      setOpportunitiesList([]);
+    } finally {
+      setLoading(false);
     }
-  ]);
+  };
+
+  const getTimeAgo = (date: string) => {
+    const now = new Date();
+    const then = new Date(date);
+    const seconds = Math.floor((now.getTime() - then.getTime()) / 1000);
+    
+    if (seconds < 60) return 'now';
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+    if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
+    return 'recently';
+  };
 
   const handleApply = (id: string) => {
     const newApplications = new Set(applications);
@@ -250,7 +274,7 @@ export default function OpportunitiesPage() {
               <div className="mb-4">
                 <p className="text-xs text-gray-400 mb-2">Required Skills</p>
                 <div className="flex flex-wrap gap-2">
-                  {opp.skills.map((skill) => (
+                  {(opp.skills || []).map((skill) => (
                     <Badge key={skill} variant="outline" className="text-xs">
                       {skill}
                     </Badge>
