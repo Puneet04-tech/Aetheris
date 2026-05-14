@@ -4,6 +4,18 @@ import { eq } from 'drizzle-orm';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../../../lib/auth';
 
+// Add CORS headers to response
+function addCorsHeaders(response: NextResponse) {
+  response.headers.set('Access-Control-Allow-Origin', 'http://localhost:3002');
+  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  return response;
+}
+
+export async function OPTIONS(request: NextRequest) {
+  return addCorsHeaders(new NextResponse(null, { status: 200 }));
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -11,10 +23,10 @@ export async function POST(
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user?.email) {
-      return NextResponse.json(
+      return addCorsHeaders(NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
-      );
+      ));
     }
 
     const body = await request.json();
@@ -22,10 +34,10 @@ export async function POST(
     const { id: questionId } = await params;
 
     if (!content || content.trim().length === 0) {
-      return NextResponse.json(
+      return addCorsHeaders(NextResponse.json(
         { error: 'Answer content is required' },
         { status: 400 }
-      );
+      ));
     }
 
     const database = getDb();
@@ -38,10 +50,10 @@ export async function POST(
       .limit(1);
 
     if (!user || user.length === 0) {
-      return NextResponse.json(
+      return addCorsHeaders(NextResponse.json(
         { error: 'User not found' },
         { status: 404 }
-      );
+      ));
     }
 
     // Verify question exists
@@ -52,10 +64,10 @@ export async function POST(
       .limit(1);
 
     if (!question || question.length === 0) {
-      return NextResponse.json(
+      return addCorsHeaders(NextResponse.json(
         { error: 'Question not found' },
         { status: 404 }
-      );
+      ));
     }
 
     const commentId = `answer_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -84,7 +96,7 @@ export async function POST(
       })
       .where(eq(questions.id, questionId));
 
-    return NextResponse.json(
+    return addCorsHeaders(NextResponse.json(
       {
         success: true,
         answer: {
@@ -97,12 +109,12 @@ export async function POST(
         message: 'Answer posted successfully',
       },
       { status: 201 }
-    );
+    ));
   } catch (error) {
     console.error('Error posting answer:', error);
-    return NextResponse.json(
+    return addCorsHeaders(NextResponse.json(
       { error: 'Failed to post answer', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
-    );
+    ));
   }
 }

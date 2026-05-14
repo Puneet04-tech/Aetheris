@@ -4,6 +4,18 @@ import { eq, desc, and } from 'drizzle-orm';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../lib/auth';
 
+// Add CORS headers to response
+function addCorsHeaders(response: NextResponse) {
+  response.headers.set('Access-Control-Allow-Origin', 'http://localhost:3002');
+  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  return response;
+}
+
+export async function OPTIONS(request: NextRequest) {
+  return addCorsHeaders(new NextResponse(null, { status: 200 }));
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -27,41 +39,44 @@ export async function GET(request: NextRequest) {
       orderByClause = desc(questions.createdAt);
     }
 
-    const results = await database
-      .select({
-        id: questions.id,
-        title: questions.title,
-        content: questions.content,
-        authorId: questions.authorId,
-        category: questions.category,
-        tags: questions.tags,
-        viewCount: questions.viewCount,
-        answerCount: questions.answerCount,
-        isAnswered: questions.isAnswered,
-        createdAt: questions.createdAt,
-        updatedAt: questions.updatedAt,
-        author: {
-          name: users.name,
-          image: users.image,
-        },
-      })
+    const queryResults = await database
+      .select()
       .from(questions)
-      .where(filters.length > 0 ? and(...filters) : undefined)
       .leftJoin(users, eq(questions.authorId, users.id))
+      .where(filters.length > 0 ? and(...filters) : undefined)
       .orderBy(orderByClause)
       .limit(limit)
       .offset(offset);
 
-    return NextResponse.json({
+    // Map the results to include author information
+    const results = queryResults.map((row) => ({
+      id: row.questions.id,
+      title: row.questions.title,
+      content: row.questions.content,
+      authorId: row.questions.authorId,
+      category: row.questions.category,
+      tags: row.questions.tags,
+      viewCount: row.questions.viewCount,
+      answerCount: row.questions.answerCount,
+      isAnswered: row.questions.isAnswered,
+      createdAt: row.questions.createdAt,
+      updatedAt: row.questions.updatedAt,
+      author: row.users ? {
+        name: row.users.name,
+        image: row.users.image,
+      } : null,
+    }));
+
+    return addCorsHeaders(NextResponse.json({
       questions: results,
       pagination: { limit, offset, count: results.length },
-    });
+    }));
   } catch (error) {
     console.error('Error fetching questions:', error);
-    return NextResponse.json(
+    return addCorsHeaders(NextResponse.json(
       { error: 'Failed to fetch questions', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
-    );
+    ));
   }
 }
 
@@ -69,20 +84,20 @@ export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user?.email) {
-      return NextResponse.json(
+      return addCorsHeaders(NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
-      );
+      ));
     }
 
     const body = await request.json();
     const { title, content, category = 'general', tags = [] } = body;
 
     if (!title || !content) {
-      return NextResponse.json(
+      return addCorsHeaders(NextResponse.json(
         { error: 'Missing required fields: title, content' },
         { status: 400 }
-      );
+      ));
     }
 
     const database = getDb();
@@ -95,10 +110,10 @@ export async function POST(request: NextRequest) {
       .limit(1);
 
     if (!user || user.length === 0) {
-      return NextResponse.json(
+      return addCorsHeaders(NextResponse.json(
         { error: 'User not found' },
         { status: 404 }
-      );
+      ));
     }
 
     const questionId = `question_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -121,7 +136,7 @@ export async function POST(request: NextRequest) {
       })
       .returning();
 
-    return NextResponse.json(
+    return addCorsHeaders(NextResponse.json(
       {
         success: true,
         question: {
@@ -134,12 +149,12 @@ export async function POST(request: NextRequest) {
         message: 'Question created successfully',
       },
       { status: 201 }
-    );
+    ));
   } catch (error) {
     console.error('Error creating question:', error);
-    return NextResponse.json(
+    return addCorsHeaders(NextResponse.json(
       { error: 'Failed to create question', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
-    );
+    ));
   }
 }
