@@ -72,7 +72,6 @@ export async function POST(
         .update(communities)
         .set({
           memberCount,
-          updatedAt: new Date(),
         })
         .where(eq(communities.id, communityId));
 
@@ -104,7 +103,6 @@ export async function POST(
         .update(communities)
         .set({
           memberCount,
-          updatedAt: new Date(),
         })
         .where(eq(communities.id, communityId));
 

@@ -26,11 +26,11 @@ export const authOptions: NextAuthOptions = {
             .from(users)
             .where(eq(users.email, credentials.email));
 
-          if (!user || !user.password) {
+          if (!user || !user.password_hash) {
             return null;
           }
 
-          const isPasswordValid = await bcrypt.compare(credentials.password, user.password);
+          const isPasswordValid = await bcrypt.compare(credentials.password, user.password_hash);
 
           if (!isPasswordValid) {
             return null;
