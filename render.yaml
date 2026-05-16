@@ -25,3 +25,7 @@ services:
         sync: false
       - key: NEXT_PUBLIC_PUSHER_CLUSTER
         value: mt1
+      - key: PORT
+        value: 3001
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=384
