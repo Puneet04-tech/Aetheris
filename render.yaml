@@ -1,9 +1,11 @@
 services:
   - type: web
     name: aetheris-backend
-    env: docker
+    env: node
     plan: free
     rootDir: backend
+    buildCommand: npm install && npm run build
+    startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
@@ -23,3 +25,5 @@ services:
         sync: false
       - key: NEXT_PUBLIC_PUSHER_CLUSTER
         value: mt1
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=384
