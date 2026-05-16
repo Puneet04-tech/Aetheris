@@ -4,6 +4,7 @@
   "description": "Backend API for Aetheris - The Unified Professional Ecosystem",
   "main": "index.js",
   "scripts": {
+    "dev": "NODE_ENV=production next start -p 3001",
     "dev:local": "next dev -p 3001",
     "build": "next build",
     "start": "NODE_ENV=production next start -p 3001",
