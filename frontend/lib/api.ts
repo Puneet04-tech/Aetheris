@@ -1,5 +1,5 @@
 // Frontend API Client
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://aetheris-mjvx.onrender.com/api';
 
 console.log('API_BASE_URL:', API_BASE_URL);
 

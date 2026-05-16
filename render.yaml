@@ -14,7 +14,7 @@ services:
       - key: NEXTAUTH_SECRET
         generateValue: true
       - key: NEXTAUTH_URL
-        value: https://aetheris-backend.onrender.com
+        value: https://aetheris-mjvx.onrender.com
       - key: FRONTEND_URL
         value: https://aetheris-frontend.vercel.app
       - key: PUSHER_APP_ID
