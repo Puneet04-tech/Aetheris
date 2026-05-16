@@ -27,15 +27,23 @@ interface Question {
   createdAt?: string;
 }
 
+interface Answer {
+  id: string;
+  content: string;
+  author?: { name: string };
+  createdAt: string;
+  upvotes?: number;
+  downvotes?: number;
+}
+
 export default function QAPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState('unanswered');
-  const [answeredQuestions, setAnsweredQuestions] = useState<Set<string>>(new Set());
   const [showAnswerModal, setShowAnswerModal] = useState<string | null>(null);
   const [showQuestionModal, setShowQuestionModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState<string | null>(null);
   const [viewQuestionData, setViewQuestionData] = useState<Question | null>(null);
-  const [answersList, setAnswersList] = useState<any[]>([]);
+  const [answersList, setAnswersList] = useState<Answer[]>([]);
   const [answerText, setAnswerText] = useState('');
   const [questionTitle, setQuestionTitle] = useState('');
   const [questionContent, setQuestionContent] = useState('');
@@ -83,8 +91,6 @@ export default function QAPage() {
       }));
 
       setQuestions(mappedQuestions);
-      // Update answered questions set
-      setAnsweredQuestions(new Set(mappedQuestions.filter((q: Question) => q.answered || q.isAnswered).map((q: Question) => q.id)));
     } catch (err) {
       console.error('Error loading questions:', err);
       setQuestions([]);
