@@ -9,6 +9,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: PORT
+        value: 3001
       - key: DATABASE_URL
         sync: false
       - key: NEXTAUTH_SECRET
@@ -16,6 +18,8 @@ services:
       - key: NEXTAUTH_URL
         value: https://aetheris-mjvx.onrender.com
       - key: FRONTEND_URL
+        value: https://aetheris-blue.vercel.app
+      - key: CORS_ORIGIN
         value: https://aetheris-blue.vercel.app
       - key: PUSHER_APP_ID
         sync: false

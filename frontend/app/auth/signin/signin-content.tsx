@@ -31,17 +31,27 @@ export default function SignInContent() {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/auth/signin`, {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      console.log('Signin API URL:', `${apiUrl}/auth/signin`);
+
+      const response = await fetch(`${apiUrl}/auth/signin`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: formData.email,
           password: formData.password
         }),
+        signal: controller.signal,
       });
 
+      clearTimeout(timeoutId);
+
       if (!response.ok) {
-        setError('Invalid email or password');
+        const errorData = await response.json();
+        setError(errorData.error || 'Invalid email or password');
         return;
       }
 
@@ -51,10 +61,15 @@ export default function SignInContent() {
         router.push('/dashboard');
         router.refresh();
       } else {
-        setError('Invalid email or password');
+        setError(userData.error || 'Invalid email or password');
       }
     } catch (error) {
-      setError('Network error. Please try again.');
+      if (error instanceof Error && error.name === 'AbortError') {
+        setError('Request timeout. Backend may be unavailable. Please try again.');
+      } else {
+        console.error('Signin error:', error);
+        setError('Network error. Please check your connection and try again.');
+      }
     } finally {
       setIsLoading(false);
     }

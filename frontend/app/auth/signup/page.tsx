@@ -38,7 +38,13 @@ export default function SignUpPage() {
     }
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/auth/register`, {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      console.log('Signup API URL:', `${apiUrl}/auth/register`);
+      
+      const response = await fetch(`${apiUrl}/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -48,17 +54,24 @@ export default function SignUpPage() {
           email: formData.email,
           password: formData.password,
         }),
+        signal: controller.signal,
       });
 
+      clearTimeout(timeoutId);
       const data = await response.json();
 
       if (response.ok) {
         router.push('/auth/signin?message=Registration successful');
       } else {
-        setError(data.error || 'Registration failed');
+        setError(data.error || data.details || 'Registration failed');
       }
     } catch (error) {
-      setError('Network error. Please try again.');
+      if (error instanceof Error && error.name === 'AbortError') {
+        setError('Request timeout. Backend may be unavailable. Please try again.');
+      } else {
+        console.error('Signup error:', error);
+        setError('Network error. Please check your connection and try again.');
+      }
     } finally {
       setIsLoading(false);
     }
