@@ -9,6 +9,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=512
       - key: PORT
         value: 3001
       - key: DATABASE_URL
@@ -29,5 +31,3 @@ services:
         sync: false
       - key: NEXT_PUBLIC_PUSHER_CLUSTER
         value: mt1
-      - key: NODE_OPTIONS
-        value: --max-old-space-size=384
