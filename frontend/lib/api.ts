@@ -90,6 +90,13 @@ export const postsAPI = {
   getComments: async (postId: string) => {
     return apiCall<any>(`/posts/${postId}/comments`, 'GET', null, false);
   },
+
+  sendTypingEvent: async (postId: string, userName: string, isTyping: boolean) => {
+    return apiCall<any>(`/posts/${postId}/typing`, 'POST', {
+      userName,
+      isTyping,
+    });
+  },
 };
 
 // Communities API
@@ -179,7 +186,21 @@ export const qaAPI = {
   getAnswers: async (questionId: string) => {
     return apiCall<any>(`/qa/${questionId}/answers`, 'GET', null, false);
   },
+
+  voteAnswer: async (answerId: string, type: 'upvote' | 'downvote') => {
+    return apiCall<any>(`/qa/answers/${answerId}/vote`, 'POST', {
+      type,
+    });
+  },
 };
+
+// Users API
+export const usersAPI = {
+  getStats: async () => {
+    return apiCall<any>('/users/stats', 'GET');
+  },
+};
+
 
 export default {
   postsAPI,

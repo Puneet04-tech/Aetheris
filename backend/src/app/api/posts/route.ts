@@ -32,6 +32,10 @@ export async function GET(request: NextRequest) {
         orderByClause = desc(posts.createdAt);
     }
 
+    // Get current user ID from Authorization header if present
+    const authHeader = request.headers.get('authorization') || request.headers.get('Authorization');
+    const currentUserId = authHeader?.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
+
     const results = await database
       .select({
         id: posts.id,
@@ -64,11 +68,18 @@ export async function GET(request: NextRequest) {
           name: communities.name,
           slug: communities.slug,
         },
+        userVote: votes.voteType, // Include the user's vote status
       })
       .from(posts)
       .where(filters.length > 0 ? and(...filters) : undefined)
       .leftJoin(users, eq(posts.authorId, users.id))
       .leftJoin(communities, eq(posts.communityId, communities.id))
+      .leftJoin(
+        votes,
+        currentUserId 
+          ? and(eq(posts.id, votes.postId), eq(votes.userId, currentUserId))
+          : sql`FALSE` // Join with a condition that is always false if no user is logged in
+      )
       .orderBy(orderByClause)
       .limit(limit)
       .offset(offset);

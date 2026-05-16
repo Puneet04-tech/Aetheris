@@ -1,20 +1,79 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb, comments, posts, users } from '../../../../../lib/database';
 import { eq } from 'drizzle-orm';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '../../../../../lib/auth';
+
+// Add CORS headers to response
+function addCorsHeaders(response: NextResponse) {
+  response.headers.set('Access-Control-Allow-Origin', 'http://localhost:3002');
+  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  return response;
+}
+
+export async function OPTIONS(request: NextRequest) {
+  return addCorsHeaders(new NextResponse(null, { status: 200 }));
+}
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id: postId } = await params;
+    const database = getDb();
+
+    const queryResults = await database
+      .select({
+        id: comments.id,
+        content: comments.content,
+        authorId: comments.authorId,
+        upvotes: comments.upvotes,
+        downvotes: comments.downvotes,
+        createdAt: comments.createdAt,
+        updatedAt: comments.updatedAt,
+        author: {
+          name: users.name,
+          image: users.image,
+        }
+      })
+      .from(comments)
+      .where(eq(comments.postId, postId))
+      .leftJoin(users, eq(comments.authorId, users.id))
+      .orderBy(comments.createdAt);
+
+    return addCorsHeaders(NextResponse.json({
+      success: true,
+      comments: queryResults,
+    }));
+  } catch (error) {
+    console.error('Error fetching comments:', error);
+    return addCorsHeaders(NextResponse.json(
+      { error: 'Failed to fetch comments', details: error instanceof Error ? error.message : 'Unknown error' },
+      { status: 500 }
+    ));
+  }
+}
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session || !session.user?.email) {
-      return NextResponse.json(
+    // Custom auth check using Authorization header
+    const authHeader = request.headers.get('authorization') || request.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return addCorsHeaders(NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
-      );
+      ));
+    }
+
+    const userId = authHeader.split(' ')[1];
+    if (!userId) {
+      return addCorsHeaders(NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      ));
     }
 
     const body = await request.json();
@@ -22,26 +81,26 @@ export async function POST(
     const { id: postId } = await params;
 
     if (!content || content.trim().length === 0) {
-      return NextResponse.json(
+      return addCorsHeaders(NextResponse.json(
         { error: 'Comment content is required' },
         { status: 400 }
-      );
+      ));
     }
 
     const database = getDb();
 
-    // Get user
+    // Get user by ID instead of email
     const user = await database
       .select()
       .from(users)
-      .where(eq(users.email, session.user.email))
+      .where(eq(users.id, userId))
       .limit(1);
 
     if (!user || user.length === 0) {
-      return NextResponse.json(
+      return addCorsHeaders(NextResponse.json(
         { error: 'User not found' },
         { status: 404 }
-      );
+      ));
     }
 
     // Verify post exists
@@ -52,10 +111,10 @@ export async function POST(
       .limit(1);
 
     if (!post || post.length === 0) {
-      return NextResponse.json(
+      return addCorsHeaders(NextResponse.json(
         { error: 'Post not found' },
         { status: 404 }
-      );
+      ));
     }
 
     const commentId = `comment_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -82,7 +141,7 @@ export async function POST(
       })
       .where(eq(posts.id, postId));
 
-    return NextResponse.json(
+    return addCorsHeaders(NextResponse.json(
       {
         success: true,
         comment: {
@@ -95,12 +154,12 @@ export async function POST(
         message: 'Comment added successfully',
       },
       { status: 201 }
-    );
+    ));
   } catch (error) {
     console.error('Error adding comment:', error);
-    return NextResponse.json(
+    return addCorsHeaders(NextResponse.json(
       { error: 'Failed to add comment', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
-    );
+    ));
   }
 }

@@ -1,10 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Heart, MessageCircle, Share2, Search, Plus, X, Loader } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
+import { Heart, MessageCircle, Share2, Search, Plus, X, Loader, ThumbsDown } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/app/ui/card';
 import { Badge } from '@/app/ui/badge';
 import { postsAPI } from '@/lib/api';
+import { CommentSection } from '@/app/components/CommentSection';
+import { ProfessionalRibbon } from '@/app/components/ProfessionalRibbon';
 
 interface Post {
   id: string;
@@ -19,6 +22,7 @@ interface Post {
   tags?: string[];
   createdAt: string;
   updatedAt?: string;
+  userVote?: 'upvote' | 'downvote' | null;
 }
 
 export default function FeedPage() {
@@ -31,7 +35,30 @@ export default function FeedPage() {
   const [newPost, setNewPost] = useState({ title: '', content: '', type: 'PULSE' });
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
   const [showComments, setShowComments] = useState<Record<string, boolean>>({});
+  const [postComments, setPostComments] = useState<Record<string, any[]>>({});
   const [userVotes, setUserVotes] = useState<Record<string, 'upvote' | 'downvote' | null>>({});
+  const [currentUserName, setCurrentUserName] = useState('Anonymous');
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const type = searchParams.get('type');
+    if (type) {
+      setFilterType(type);
+    }
+
+    const create = searchParams.get('create');
+    if (create === 'true') {
+      setShowCreateModal(true);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    const userData = localStorage.getItem('user');
+    if (userData) {
+      const user = JSON.parse(userData);
+      setCurrentUserName(user.name || 'Anonymous');
+    }
+  }, []);
 
   const postTypes = [
     { label: 'All Posts', value: 'All' },
@@ -55,6 +82,16 @@ export default function FeedPage() {
       // Handle different response formats
       const postList = Array.isArray(response) ? response : (response?.posts || response?.data || []);
       setPosts(postList);
+
+      // Sync user votes from API response
+      const initialVotes: Record<string, 'upvote' | 'downvote' | null> = {};
+      postList.forEach((post: any) => {
+        if (post.userVote) {
+          initialVotes[post.id] = post.userVote;
+        }
+      });
+      setUserVotes(initialVotes);
+      
       setError(null);
     } catch (err) {
       console.error('Error loading posts:', err);
@@ -123,50 +160,67 @@ export default function FeedPage() {
   };
 
   const handleVote = async (postId: string, voteType: 'upvote' | 'downvote') => {
+    // 1. Calculate new values for optimistic update
+    const currentVote = userVotes[postId] || null;
+    const postIndex = posts.findIndex(p => p.id === postId);
+    if (postIndex === -1) return;
+
+    const post = posts[postIndex];
+    let upvotes = post.upvotes;
+    let downvotes = post.downvotes;
+
+    // Apply logic to update vote counts based on current and new vote
+    if (currentVote === voteType) {
+      // Removing the vote
+      if (voteType === 'upvote') upvotes = Math.max(0, upvotes - 1);
+      else downvotes = Math.max(0, downvotes - 1);
+    } else {
+      // Changing or adding vote
+      if (currentVote === 'upvote') upvotes = Math.max(0, upvotes - 1);
+      if (currentVote === 'downvote') downvotes = Math.max(0, downvotes - 1);
+      
+      if (voteType === 'upvote') upvotes += 1;
+      if (voteType === 'downvote') downvotes += 1;
+    }
+
+    const newVote = currentVote === voteType ? null : voteType;
+
+    // 2. Perform Optimistic Update
+    const updatedPost = { ...post, upvotes, downvotes };
+    const newPosts = [...posts];
+    newPosts[postIndex] = updatedPost;
+    
+    setPosts(newPosts);
+    setUserVotes({ ...userVotes, [postId]: newVote });
+
+    // 3. Make API Call
     try {
       const response = voteType === 'upvote'
         ? await postsAPI.upvote(postId)
         : await postsAPI.downvote(postId);
 
-      if (response.success) {
-        // Update local state
-        const currentVote = userVotes[postId];
-        const newPosts = posts.map((post) => {
-          if (post.id === postId) {
-            let upvotes = post.upvotes;
-            let downvotes = post.downvotes;
-
-            if (currentVote === voteType) {
-              // Remove vote
-              if (voteType === 'upvote') upvotes = Math.max(0, upvotes - 1);
-              else downvotes = Math.max(0, downvotes - 1);
-            } else if (currentVote === null) {
-              // Add vote
-              if (voteType === 'upvote') upvotes += 1;
-              else downvotes += 1;
-            } else {
-              // Change vote
-              if (currentVote === 'upvote') upvotes = Math.max(0, upvotes - 1);
-              else downvotes = Math.max(0, downvotes - 1);
-              
-              if (voteType === 'upvote') upvotes += 1;
-              else downvotes += 1;
-            }
-
-            return { ...post, upvotes, downvotes };
-          }
-          return post;
-        });
-
-        setPosts(newPosts);
-        setUserVotes({
-          ...userVotes,
-          [postId]: currentVote === voteType ? null : voteType,
-        });
+      if (!response || !response.success) {
+        throw new Error('Vote failed');
       }
     } catch (err) {
       console.error('Error voting:', err);
+      // Revert optimistic update on failure
+      const revertedPosts = [...posts];
+      revertedPosts[postIndex] = post; // Restoring original post state
+      setPosts(revertedPosts);
+      setUserVotes({ ...userVotes, [postId]: currentVote }); // Restoring original vote
       setError(err instanceof Error ? err.message : 'Failed to vote');
+    }
+  };
+
+  const loadComments = async (postId: string) => {
+    try {
+      const response = await postsAPI.getComments(postId);
+      if (response.success) {
+        setPostComments(prev => ({ ...prev, [postId]: response.comments || [] }));
+      }
+    } catch (err) {
+      console.error('Error loading comments:', err);
     }
   };
 
@@ -184,6 +238,14 @@ export default function FeedPage() {
         );
         setPosts(newPosts);
         setCommentInputs({ ...commentInputs, [postId]: '' });
+        
+        // Update comments list locally
+        if (response.comment) {
+          setPostComments(prev => ({
+            ...prev,
+            [postId]: [...(prev[postId] || []), response.comment]
+          }));
+        }
       }
     } catch (err) {
       console.error('Error adding comment:', err);
@@ -364,8 +426,14 @@ export default function FeedPage() {
               <p className="text-gray-400">No posts found. Create one to get started!</p>
             </Card>
           ) : (
-            filteredPosts.map((post) => (
-              <Card key={post.id} className="variant-default hover:border-emerald-500/30 transition-all">
+            filteredPosts.map((post, index) => (
+              <Card key={post.id} className="variant-default hover:border-emerald-500/30 transition-all relative overflow-visible mb-6">
+                {/* Visual Ribbon for CEO-grade feel */}
+                {(index % 3 === 0) && (
+                  <ProfessionalRibbon 
+                    type={index % 6 === 0 ? 'ceo' : (index % 9 === 0 ? 'expert' : 'verified')} 
+                  />
+                )}
                 <CardHeader>
                   <div className="flex justify-between items-start">
                     <div className="flex gap-3 flex-1">
@@ -401,19 +469,36 @@ export default function FeedPage() {
 
                   {/* Actions */}
                   <div className="flex gap-4 pt-4 border-t border-white/10">
+                    <div className="flex items-center">
+                      <button
+                        onClick={() => handleVote(post.id, 'upvote')}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-l-lg transition-all border border-transparent ${
+                          userVotes[post.id] === 'upvote'
+                            ? 'text-red-400 bg-red-500/20 border-red-500/30'
+                            : 'text-gray-400 hover:text-red-400 hover:bg-red-500/10 hover:border-red-500/20'
+                        }`}
+                      >
+                        <Heart size={18} fill={userVotes[post.id] === 'upvote' ? 'currentColor' : 'none'} />
+                        <span className="text-sm font-medium">{post.upvotes}</span>
+                      </button>
+                      <button
+                        onClick={() => handleVote(post.id, 'downvote')}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-r-lg transition-all border border-transparent ${
+                          userVotes[post.id] === 'downvote'
+                            ? 'text-purple-400 bg-purple-500/20 border-purple-500/30'
+                            : 'text-gray-400 hover:text-purple-400 hover:bg-purple-500/10 hover:border-purple-500/20'
+                        }`}
+                      >
+                        <ThumbsDown size={18} fill={userVotes[post.id] === 'downvote' ? 'currentColor' : 'none'} />
+                        <span className="text-sm font-medium">{post.downvotes}</span>
+                      </button>
+                    </div>
                     <button
-                      onClick={() => handleVote(post.id, 'upvote')}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
-                        userVotes[post.id] === 'upvote'
-                          ? 'text-red-400 bg-red-500/20'
-                          : 'text-gray-400 hover:text-red-400 hover:bg-red-500/20'
-                      }`}
-                    >
-                      <Heart size={18} fill={userVotes[post.id] === 'upvote' ? 'currentColor' : 'none'} />
-                      <span className="text-sm font-medium">{post.upvotes}</span>
-                    </button>
-                    <button
-                      onClick={() => setShowComments({ ...showComments, [post.id]: !showComments[post.id] })}
+                      onClick={() => {
+                        const newState = !showComments[post.id];
+                        setShowComments({ ...showComments, [post.id]: newState });
+                        if (newState) loadComments(post.id);
+                      }}
                       className="flex items-center gap-2 px-4 py-2 rounded-lg text-gray-400 hover:text-blue-400 hover:bg-blue-500/20 transition-all"
                     >
                       <MessageCircle size={18} />
@@ -426,25 +511,30 @@ export default function FeedPage() {
 
                   {/* Comments Section */}
                   {showComments[post.id] && (
-                    <div className="pt-4 border-t border-white/10 space-y-3">
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={commentInputs[post.id] || ''}
-                          onChange={(e) =>
-                            setCommentInputs({ ...commentInputs, [post.id]: e.target.value })
+                    <CommentSection
+                      postId={post.id}
+                      comments={postComments[post.id]}
+                      userName={currentUserName}
+                      onAddComment={async (content) => {
+                        const response = await postsAPI.addComment(post.id, content);
+                        if (response.success) {
+                          const newPosts = posts.map((p) =>
+                            p.id === post.id
+                              ? { ...p, commentCount: (p.commentCount || 0) + 1 }
+                              : p
+                          );
+                          setPosts(newPosts);
+                          if (response.comment) {
+                            setPostComments(prev => ({
+                              ...prev,
+                              [post.id]: [...(prev[post.id] || []), response.comment]
+                            }));
                           }
-                          placeholder="Add a comment..."
-                          className="flex-1 px-4 py-2 rounded-lg glass-morphism border border-white/10 text-white placeholder-gray-500 text-sm"
-                        />
-                        <button
-                          onClick={() => handleComment(post.id)}
-                          className="px-4 py-2 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-all text-sm font-medium"
-                        >
-                          Post
-                        </button>
-                      </div>
-                    </div>
+                        }
+                      }}
+                      getAvatarInitials={getAvatarInitials}
+                      getTimeAgo={getTimeAgo}
+                    />
                   )}
                 </CardContent>
               </Card>

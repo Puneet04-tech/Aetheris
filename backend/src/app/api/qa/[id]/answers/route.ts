@@ -12,6 +12,46 @@ function addCorsHeaders(response: NextResponse) {
   return response;
 }
 
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id: questionId } = await params;
+    const database = getDb();
+
+    const queryResults = await database
+      .select({
+        id: comments.id,
+        content: comments.content,
+        authorId: comments.authorId,
+        upvotes: comments.upvotes,
+        downvotes: comments.downvotes,
+        isApprovedAnswer: comments.isApprovedAnswer,
+        createdAt: comments.createdAt,
+        updatedAt: comments.updatedAt,
+        author: {
+          name: users.name,
+          image: users.image,
+        }
+      })
+      .from(comments)
+      .where(eq(comments.postId, questionId))
+      .leftJoin(users, eq(comments.authorId, users.id))
+      .orderBy(comments.createdAt);
+
+    return addCorsHeaders(NextResponse.json({
+      answers: queryResults,
+    }));
+  } catch (error) {
+    console.error('Error fetching answers:', error);
+    return addCorsHeaders(NextResponse.json(
+      { error: 'Failed to fetch answers', details: error instanceof Error ? error.message : 'Unknown error' },
+      { status: 500 }
+    ));
+  }
+}
+
 export async function OPTIONS(request: NextRequest) {
   return addCorsHeaders(new NextResponse(null, { status: 200 }));
 }
@@ -21,8 +61,17 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session || !session.user?.email) {
+    // Custom auth check using Authorization header
+    const authHeader = request.headers.get('authorization') || request.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return addCorsHeaders(NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      ));
+    }
+
+    const userId = authHeader.split(' ')[1];
+    if (!userId) {
       return addCorsHeaders(NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -42,11 +91,11 @@ export async function POST(
 
     const database = getDb();
 
-    // Get user
+    // Get user by ID instead of email
     const user = await database
       .select()
       .from(users)
-      .where(eq(users.email, session.user.email))
+      .where(eq(users.id, userId))
       .limit(1);
 
     if (!user || user.length === 0) {
