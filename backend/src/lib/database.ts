@@ -17,9 +17,7 @@ function initializeDatabase() {
     
     if (!sql) {
       console.log('Creating Neon database connection...');
-      sql = neon(dbUrl, {
-        fetchConnectionCache: 'manual',
-      });
+      sql = neon(dbUrl);
     }
     
     if (!db) {
@@ -30,14 +28,8 @@ function initializeDatabase() {
     initialized = true;
     return db;
   } catch (error) {
-    console.error('Database initialization error:', error);
+    console.error('Database initialization error:', error instanceof Error ? error.message : 'Unknown error');
     initialized = true; // Mark as initialized even on error to prevent retries
-    return null;
-  }
-}
-    console.error('Database initialization failed:', error instanceof Error ? error.message : 'Unknown error');
-    // Allow app to run without database in development
-    initialized = true;
     return null;
   }
 }
